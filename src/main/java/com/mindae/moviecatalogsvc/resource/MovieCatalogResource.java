@@ -6,7 +6,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.apache.http.protocol.ExecutionContext;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cloud.client.circuitbreaker.EnableCircuitBreaker;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -18,6 +20,8 @@ import com.mindae.moviecatalogsvc.model.CatalogItem;
 import com.mindae.moviecatalogsvc.model.Movie;
 import com.mindae.moviecatalogsvc.model.Rating;
 import com.mindae.moviecatalogsvc.model.UserRating;
+import com.netflix.hystrix.contrib.javanica.annotation.HystrixCommand;
+import com.netflix.hystrix.contrib.javanica.annotation.HystrixProperty;
 
 @RestController
 @RequestMapping("/catalog")
@@ -27,6 +31,16 @@ public class MovieCatalogResource {
 	
 	@Autowired
 	private WebClient.Builder webClientBuilder;
+	
+	@HystrixCommand(fallbackMethod = "getFallbackCatalog", 
+			commandProperties={
+			        @HystrixProperty(name="execution.isolation.thread.timeoutInMilliseconds",value="2000"),
+			            @HystrixProperty(name="circuitBreaker.requestVolumeThreshold",value="5"),
+			            @HystrixProperty(name="circuitBreaker.errorThresholdPercentage",value="50"),
+			            @HystrixProperty(name="metrics.rollingStats.timeInMilliseconds",value="20000"),
+			            @HystrixProperty(name="circuitBreaker.sleepWindowInMilliseconds",value="5000")
+			    }
+	)
 	@GetMapping("/{userId}")
 	public List<CatalogItem> getCatalog(@PathVariable("userId") String userId){
 		
@@ -52,7 +66,12 @@ public class MovieCatalogResource {
 						.collect(Collectors.toList());
 
 	}
-//without eureka - simple URL (host name in simple, service name as hostname in eureka URL)
+
+	//circuit breaker fallback method
+	public List<CatalogItem> getFallbackCatalog(@PathVariable("userId") String userId){
+		return Arrays.asList(new CatalogItem("no movie","",0));
+	}
+	//without eureka - simple URL (host name in simple, service name as hostname in eureka URL)
 //	@GetMapping("/{userId}")
 //	public List<CatalogItem> getCatalog(@PathVariable("userId") String userId){
 //		
